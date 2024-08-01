@@ -14,7 +14,7 @@ Here are some ideas to get you started:
 - 😄 Pronouns: ...
 - ⚡ Fun fact: ...
 -->
-[![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&pause=1000&width=725&lines=Welcome+to+my+Github!%3E%3E;Visit+'Machine-Learning-Projects'+repo+for+Machine+Learning🤖+Projects>>%3E%3E;Happy+Learning+✨;)](https://git.io/typing-svg)
+[![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&pause=1000&width=1000&lines=Welcome+to+my+Github!%3E%3E;Visit+'Machine-Learning-Projects'+repo+for+Machine+Learning🤖+Projects>>%3E%3E;Happy+Learning+✨;)](https://git.io/typing-svg)
 
 
 
