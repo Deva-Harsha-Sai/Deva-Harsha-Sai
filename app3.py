@@ -131,7 +131,73 @@ if option == 'Video Processing':
         else:
             st.warning("Video recording has not started yet or lasted less than 10 seconds.")
 
-# Financial Computation Section
+# Video Processor Class
+class VideoProcessor(VideoProcessorBase):
+    def __init__(self):
+        self.start_time = time.time()  # To track time when video starts
+        self.frames = []  # Store frames for post-processing
+
+    def recv(self, frame):
+        current_time = time.time()
+        elapsed_time = current_time - self.start_time
+
+        img = frame.to_ndarray(format="bgr24")
+
+        # Capture frames for only 10 seconds
+        if elapsed_time <= 10:
+            self.frames.append(img)
+        else:
+            return None  # Stop capturing frames after 10 seconds
+
+        return frame  # Continue to capture until 10 seconds
+
+    def process_video(self):
+        # Reduce resolution for faster processing (e.g., 320x240)
+        resized_frames = [cv2.resize(img, (320, 240)) for img in self.frames]
+
+        # Process the stored frames after capturing
+        processed_frames = []
+        for img in resized_frames:
+            # Preprocess Video (e.g., grayscale and edge detection)
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # Convert to grayscale
+
+            # Apply Sobel Edge Detection (Numba optimized)
+            edges = sobel_edge_detection(gray)
+
+            # Convert to BGR for display
+            img_resized_bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+            edges_bgr = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
+
+            processed_frames.append((img_resized_bgr, edges_bgr))
+
+        return processed_frames
+
+# Numba Grayscale function
+@njit(parallel=True)
+def grayscale_numba(frame):
+    gray = np.empty((frame.shape[0], frame.shape[1]), dtype=np.uint8)
+    for i in prange(frame.shape[0]):
+        for j in prange(frame.shape[1]):
+            r, g, b = frame[i, j]
+            gray[i, j] = int(0.2989 * r + 0.5870 * g + 0.1140 * b)
+    return gray
+
+# Sobel Edge Detection
+@njit(parallel=True)
+def sobel_edge_detection(gray):
+    h, w = gray.shape
+    edges = np.zeros((h, w), dtype=np.uint8)
+
+    Gx = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]])
+    Gy = np.array([[-1, -2, -1], [0, 0, 0], [1, 2, 1]])
+
+    for i in prange(1, h - 1):
+        for j in prange(1, w - 1):
+            gx = np.sum(Gx * gray[i - 1:i + 2, j - 1:j + 2])
+            gy = np.sum(Gy * gray[i - 1:i + 2, j - 1:j + 2])
+            edges[i, j] = min(255, int(np.sqrt(gx**2 + gy**2)))
+
+    return edges
 elif option == 'Financial Computation':
     st.header('Financial Computation')
 
