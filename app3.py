@@ -15,7 +15,7 @@ st.title('CUDA Python Task Interface')
 # Sidebar for Navigation
 option = st.sidebar.selectbox(
     'Select a Project',
-    ['Homepage', 'Video Processing', 'Financial Computation', 'Image Processing']
+    ['Homepage', 'Image Processing', 'Financial Computation', 'Real-Time Video Processing']
 )
 
 # Homepage Section
