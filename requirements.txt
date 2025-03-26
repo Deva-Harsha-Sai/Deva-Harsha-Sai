@@ -1,6 +1,8 @@
-streamlit
-opencv-python-headless
-numpy
-numba
-matplotlib
-Pillow
+streamlit==1.20.0
+streamlit-webrtc==0.43.0
+opencv-python==4.5.5.64
+numpy==1.24.2
+numba==0.56.4
+matplotlib==3.7.1
+Pillow==9.3.0
+av==8.0.3
