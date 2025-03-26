@@ -32,7 +32,7 @@ if option == 'Homepage':
     - **CuPy**: A GPU array library that is similar to NumPy, but with GPU acceleration.
     CUDA Python is used to accelerate a wide range of applications, including machine learning, scientific computing, image processing, and more.
     """)
-
+    
     # Footer
     st.markdown("""---
     **By**: Deva Harsha Sai Nangunuri
@@ -68,43 +68,32 @@ def sobel_edge_detection(gray):
 # WebRTC Video Processing
 class VideoProcessor(VideoProcessorBase):
     def __init__(self):
-        self.start_time = time.time()  # To track time when video starts
-        self.frames = []  # Store frames for post-processing
+        self.frames = []  # Store frames for real-time processing
+        self.processing = False  # Flag to control video capture
 
     def recv(self, frame):
-        current_time = time.time()
-        elapsed_time = current_time - self.start_time
+        if self.processing:
+            img = frame.to_ndarray(format="bgr24")
 
-        img = frame.to_ndarray(format="bgr24")
-
-        # Capture frames for only 10 seconds
-        if elapsed_time <= 10:
-            self.frames.append(img)
-        else:
-            return None  # Stop capturing frames after 10 seconds
-
-        return frame  # Continue to capture until 10 seconds
-
-    def process_video(self):
-        # Reduce resolution for faster processing (e.g., 320x240)
-        resized_frames = [cv2.resize(img, (320, 240)) for img in self.frames]
-
-        # Process the stored frames after capturing
-        processed_frames = []
-        for img in resized_frames:
             # Preprocess Video (e.g., grayscale and edge detection)
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # Convert to grayscale
-
-            # Apply Sobel Edge Detection (Numba optimized)
-            edges = sobel_edge_detection(gray)
+            edges = sobel_edge_detection(gray)  # Apply Sobel Edge Detection (Numba optimized)
 
             # Convert to BGR for display
-            img_resized_bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+            gray_bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
             edges_bgr = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
 
-            processed_frames.append((img_resized_bgr, edges_bgr))
+            return frame  # Return the processed frame to continue the video stream
 
-        return processed_frames
+        else:
+            return frame  # Return the raw frame if processing is stopped
+
+    def start_processing(self):
+        self.frames.clear()  # Clear any previously stored frames
+        self.processing = True  # Start capturing and processing frames
+
+    def stop_processing(self):
+        self.processing = False  # Stop capturing and processing frames
 
 # Financial Computation (Monte Carlo Simulation)
 def monte_carlo_simulation(S0, K, T, r, sigma, N):
@@ -186,28 +175,29 @@ if option == 'Image Processing':
 
 # Video Processing Section
 if option == 'Video Processing':
-    st.header('Real-Time Video Processing (10 Seconds Recording)')
+    st.header('Real-Time Video Processing (Continuous Recording)')
 
     # Create video processor for Streamlit WebRTC
     processor = VideoProcessor()
     webrtc_streamer(key="video", video_processor_factory=lambda: processor)
 
-    # Button to start processing video after 10 seconds
-    if st.button('Process Video'):
-        processed_frames = processor.process_video()
-        if processed_frames:
-            st.subheader("Processed Video Results")
+    # Button to start and stop processing video
+    start_button = st.button('Start Video Processing')
+    stop_button = st.button('Stop Video Processing')
 
-            # Show processed frames (greyscaled and edge-detected)
-            for i, (gray_frame, edge_frame) in enumerate(processed_frames):
-                # Display Greyscale Frame
-                st.image(gray_frame, caption=f"Greyscale Frame {i+1}", channels="BGR", use_column_width=True)
+    if start_button:
+        processor.start_processing()  # Start processing video
+        st.info("Video processing has started.")
 
-                # Display Edge Detection Frame
-                st.image(edge_frame, caption=f"Edge Detection Frame {i+1}", channels="BGR", use_column_width=True)
+    if stop_button:
+        processor.stop_processing()  # Stop processing video
+        st.info("Video processing has stopped.")
 
-        else:
-            st.warning("Video recording has not started yet or lasted less than 10 seconds.")
+    # Display continuous video processing feedback
+    if processor.processing:
+        st.text("Processing frames in real-time...")
+    else:
+        st.text("Click 'Start Video Processing' to begin.")
 
 # Financial Computation Section
 elif option == 'Financial Computation':
@@ -223,12 +213,9 @@ elif option == 'Financial Computation':
 
     if st.button('Compute Option Price'):
         # Perform the Monte Carlo simulation
-        price = monte_carlo_simulation(S0, K, T, r, sigma, N)
-        st.write(f"Monte Carlo Estimated Option Price (CPU Parallel): {price:.4f}")
+        option_price = monte_carlo_simulation(S0, K, T, r, sigma, N)
+        st.write(f"Estimated Option Price: ${option_price:.2f}")
 
-        # Simulate stock prices
-        simulated_prices = np.random.randn(N) * sigma * np.sqrt(T) + (r - 0.5 * sigma**2) * T
-        ST = S0 * np.exp(simulated_prices)
-
-        # Plot and display the histogram of simulated stock prices
-        plot_histogram(ST, S0, K)
+        # Simulate and plot the distribution of stock prices
+        simulated_prices = [S0 * np.exp((r - 0.5 * sigma**2) * T + sigma * np.sqrt(T) * np.random.randn()) for _ in range(N)]
+        plot_histogram(simulated_prices, S0, K)
