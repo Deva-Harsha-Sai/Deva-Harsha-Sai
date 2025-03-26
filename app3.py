@@ -4,7 +4,6 @@ import numpy as np
 import time
 from numba import njit, prange
 import matplotlib.pyplot as plt
-import multiprocessing
 from io import BytesIO
 from PIL import Image
 import av
@@ -28,22 +27,10 @@ if option == 'Homepage':
     st.write(""" 
     CUDA Python is a powerful library that allows you to write Python code that runs on GPUs (Graphics Processing Units) using NVIDIA's CUDA platform.
     It provides several libraries like `Numba`, `PyCUDA`, and `CuPy` that help accelerate your programs by offloading computations to the GPU.
-    
     - **Numba**: A JIT compiler that can parallelize Python code and execute it on the GPU.
     - **PyCUDA**: Provides access to NVIDIA's CUDA parallel computation API.
     - **CuPy**: A GPU array library that is similar to NumPy, but with GPU acceleration.
-
     CUDA Python is used to accelerate a wide range of applications, including machine learning, scientific computing, image processing, and more.
-    """)
-
-    st.subheader("Why Use CUDA Python?")
-    st.write(""" 
-    Using CUDA Python can significantly speed up computations by utilizing the power of GPUs. GPUs are highly parallel and can process many tasks simultaneously, making them well-suited for operations like matrix multiplications, convolutions, and other mathematical computations.
-    This makes CUDA Python ideal for tasks that require heavy computation, such as:
-    - Image and video processing
-    - Financial computations
-    - Machine learning
-    - Simulation-based tasks
     """)
 
     # Footer
@@ -80,75 +67,69 @@ def sobel_edge_detection(gray):
 
     return edges
 
-# Financial Computation Functions (Monte Carlo Simulation for Option Pricing)
-def monte_carlo_simulation(S0, K, T, r, sigma, N):
-    np.random.seed(42)
-    dt = T
-    discount_factor = np.exp(-r * T)
-    
-    payoffs = np.zeros(N)
-    for i in prange(N):
-        Z = np.random.randn()
-        ST = S0 * np.exp((r - 0.5 * sigma**2) * dt + sigma * np.sqrt(dt) * Z)
-        payoffs[i] = max(ST - K, 0)  # Call option payoff
-
-    return discount_factor * np.mean(payoffs)
-
-def plot_histogram(simulated_prices, S0, K):
-    plt.figure(figsize=(10, 5))
-    plt.hist(simulated_prices, bins=50, color='blue', alpha=0.6, edgecolor='black')
-    plt.axvline(x=K, color='red', linestyle="--", label="Strike Price (K)")
-    plt.xlabel("Simulated Stock Price at Maturity")
-    plt.ylabel("Frequency")
-    plt.title("Monte Carlo Simulated Stock Prices")
-    plt.legend()
-    st.pyplot(plt)
-
-# Image Processing Functions
-def process_image(uploaded_image):
-    """
-    This function processes the uploaded image (e.g., converts to grayscale).
-    """
-    img_array = np.array(bytearray(uploaded_image.read()), dtype=np.uint8)
-    img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-
-    # Convert the image to grayscale
-    gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-    # Apply Sobel Edge Detection
-    edge_image = sobel_edge_detection(gray_image)
-
-    # Convert images to RGB format for Streamlit display
-    img_bgr = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    gray_image_rgb = cv2.cvtColor(gray_image, cv2.COLOR_GRAY2RGB)
-    edge_image_rgb = cv2.cvtColor(edge_image, cv2.COLOR_GRAY2RGB)
-
-    return img_bgr, gray_image_rgb, edge_image_rgb, gray_image, edge_image
-
 # WebRTC Video Processing
 class VideoProcessor(VideoProcessorBase):
+    def __init__(self):
+        self.start_time = time.time()  # To track time when video starts
+        self.frames = []  # Store frames for post-processing
+
     def recv(self, frame):
+        current_time = time.time()
+        elapsed_time = current_time - self.start_time
+
         img = frame.to_ndarray(format="bgr24")
 
-        # Preprocess Video (e.g., resize, grayscale)
-        img_resized = cv2.resize(img, (640, 480))  # Resize the video frame
-        gray = cv2.cvtColor(img_resized, cv2.COLOR_BGR2GRAY)  # Convert to grayscale
-        
-        # Apply Sobel Edge Detection
-        edges = sobel_edge_detection(gray)
+        # Capture frames for only 10 seconds
+        if elapsed_time <= 10:
+            self.frames.append(img)
+        else:
+            return None  # Stop capturing frames after 10 seconds
 
-        # Convert back to BGR for display
-        img_resized_bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
-        edges_bgr = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
+        return frame  # Continue to capture until 10 seconds
 
-        # Return processed frame
-        return av.VideoFrame.from_ndarray(edges_bgr, format="bgr24")
+    def process_video(self):
+        # Process the stored frames after capturing
+        processed_frames = []
+        for img in self.frames:
+            # Preprocess Video (e.g., grayscale and edge detection)
+            img_resized = cv2.resize(img, (640, 480))  # Resize the video frame
+            gray = cv2.cvtColor(img_resized, cv2.COLOR_BGR2GRAY)  # Convert to grayscale
+            
+            # Apply Sobel Edge Detection
+            edges = sobel_edge_detection(gray)
+
+            # Convert to BGR for display
+            img_resized_bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+            edges_bgr = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
+
+            processed_frames.append((img_resized_bgr, edges_bgr))
+
+        return processed_frames
 
 # Video Processing Section
 if option == 'Video Processing':
-    st.header('Real-Time Video Processing')
+    st.header('Real-Time Video Processing (10 Seconds Recording)')
 
-    webrtc_streamer(key="video", video_processor_factory=VideoProcessor)
+    # Create video processor for Streamlit WebRTC
+    processor = VideoProcessor()
+    webrtc_streamer(key="video", video_processor_factory=lambda: processor)
+
+    # Button to start processing video after 10 seconds
+    if st.button('Process Video'):
+        processed_frames = processor.process_video()
+        if processed_frames:
+            st.subheader("Processed Video Results")
+
+            # Show processed frames (greyscaled and edge-detected)
+            for i, (gray_frame, edge_frame) in enumerate(processed_frames):
+                # Display Greyscale Frame
+                st.image(gray_frame, caption=f"Greyscale Frame {i+1}", channels="BGR", use_column_width=True)
+
+                # Display Edge Detection Frame
+                st.image(edge_frame, caption=f"Edge Detection Frame {i+1}", channels="BGR", use_column_width=True)
+
+        else:
+            st.warning("Video recording has not started yet or lasted less than 10 seconds.")
 
 # Financial Computation Section
 elif option == 'Financial Computation':
