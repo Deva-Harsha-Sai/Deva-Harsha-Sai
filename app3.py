@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 import multiprocessing
 from io import BytesIO
 from PIL import Image
+import av
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
 
 # Streamlit App Title
 st.title('CUDA Python Task Interface')
@@ -23,7 +25,7 @@ if option == 'Homepage':
     
     # Basics about CUDA Python
     st.subheader("What is CUDA Python?")
-    st.write("""
+    st.write(""" 
     CUDA Python is a powerful library that allows you to write Python code that runs on GPUs (Graphics Processing Units) using NVIDIA's CUDA platform.
     It provides several libraries like `Numba`, `PyCUDA`, and `CuPy` that help accelerate your programs by offloading computations to the GPU.
     
@@ -35,7 +37,7 @@ if option == 'Homepage':
     """)
 
     st.subheader("Why Use CUDA Python?")
-    st.write("""
+    st.write(""" 
     Using CUDA Python can significantly speed up computations by utilizing the power of GPUs. GPUs are highly parallel and can process many tasks simultaneously, making them well-suited for operations like matrix multiplications, convolutions, and other mathematical computations.
     This makes CUDA Python ideal for tasks that require heavy computation, such as:
     - Image and video processing
@@ -124,85 +126,22 @@ def process_image(uploaded_image):
 
     return img_bgr, gray_image_rgb, edge_image_rgb, gray_image, edge_image
 
+# WebRTC Video Processing
+class VideoProcessor(VideoProcessorBase):
+    def recv(self, frame):
+        img = frame.to_ndarray(format="bgr24")
+
+        # Convert to grayscale
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        img = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+
+        return av.VideoFrame.from_ndarray(img, format="bgr24")
+
 # Video Processing Section
 if option == 'Video Processing':
     st.header('Real-Time Video Processing')
 
-    # Start webcam button
-    if 'video_processing' not in st.session_state:
-        st.session_state.video_processing = False
-        st.session_state.cap = None  # Initialize webcam capture object
-
-    start_button = st.button('Start Video Processing')
-    stop_button = st.button('Stop Video Processing')
-
-    # Start Video Processing
-    if start_button:
-        st.session_state.video_processing = True
-        if st.session_state.cap is None:
-            st.session_state.cap = cv2.VideoCapture(0)
-
-        if not st.session_state.cap.isOpened():
-            st.error("Error: Could not open webcam.")
-            exit()
-
-        st.experimental_rerun()  # Trigger a rerun to start the video processing loop
-
-    # Stop Video Processing
-    if stop_button:
-        st.session_state.video_processing = False
-        if st.session_state.cap:
-            st.session_state.cap.release()  # Release the webcam
-        st.experimental_rerun()  # Trigger a rerun to stop the video processing loop
-
-    # If video processing is active, start the webcam
-    if st.session_state.video_processing:
-        # Create a placeholder for displaying the processed frames
-        video_placeholder = st.empty()
-
-        # Placeholder for FPS count
-        fps_placeholder = st.empty()
-
-        frame_count = 0
-        start_time = time.time()
-
-        while st.session_state.video_processing:  # Process video while active
-            ret, frame = st.session_state.cap.read()
-            if not ret:
-                break
-
-            # Grayscale conversion
-            gray_frame = grayscale_numba(frame)
-
-            # Edge Detection (Sobel Filter)
-            edge_frame = sobel_edge_detection(gray_frame)
-
-            # Convert frames to 3-channel images for display
-            frame_bgr = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # Original Frame
-            gray_frame_bgr = cv2.cvtColor(gray_frame, cv2.COLOR_GRAY2RGB)  # Grayscale Frame
-            edge_frame_bgr = cv2.cvtColor(edge_frame, cv2.COLOR_GRAY2RGB)  # Edge Detected Frame
-
-            # FPS calculation
-            frame_count += 1
-            elapsed_time = time.time() - start_time
-            fps = frame_count / elapsed_time
-            fps_placeholder.text(f"FPS: {fps:.2f}")
-
-            # Display the processed video in the Streamlit app
-            video_placeholder.image(
-                [frame_bgr, gray_frame_bgr, edge_frame_bgr], 
-                caption=["Original", "Grayscale", "Edge Detection"], 
-                channels="RGB", 
-                use_column_width=True
-            )
-
-            # Allow the user to stop the stream
-            if not st.session_state.video_processing:
-                break
-
-        st.session_state.cap.release()  # Release the webcam after processing is stopped
-    else:
-        st.info("Click 'Start Video Processing' to begin.")
+    webrtc_streamer(key="video", video_processor_factory=VideoProcessor)
 
 # Financial Computation Section
 elif option == 'Financial Computation':
