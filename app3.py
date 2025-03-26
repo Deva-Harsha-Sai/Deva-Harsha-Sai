@@ -67,143 +67,35 @@ def sobel_edge_detection(gray):
 
 # WebRTC Video Processing
 class VideoProcessor(VideoProcessorBase):
-    def __init__(self):
-        self.frames = []  # Store frames for real-time processing
-        self.processing = False  # Flag to control video capture
-
     def recv(self, frame):
-        if self.processing:
-            img = frame.to_ndarray(format="bgr24")
-
-            # Preprocess Video (e.g., grayscale and edge detection)
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # Convert to grayscale
-            edges = sobel_edge_detection(gray)  # Apply Sobel Edge Detection (Numba optimized)
-
-            # Convert to BGR for display
-            gray_bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
-            edges_bgr = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
-
-            return frame  # Return the processed frame to continue the video stream
-
-        else:
-            return frame  # Return the raw frame if processing is stopped
-
-    def start_processing(self):
-        self.frames.clear()  # Clear any previously stored frames
-        self.processing = True  # Start capturing and processing frames
-
-    def stop_processing(self):
-        self.processing = False  # Stop capturing and processing frames
-
-# Financial Computation (Monte Carlo Simulation)
-def monte_carlo_simulation(S0, K, T, r, sigma, N):
-    dt = T / 365  # Daily steps
-    option_prices = []
-
-    for _ in range(N):
-        # Simulating stock price paths
-        ST = S0
-        for _ in range(int(T / dt)):
-            ST *= np.exp((r - 0.5 * sigma**2) * dt + sigma * np.sqrt(dt) * np.random.randn())
-
-        # Option payoff for a call option
-        payoff = max(ST - K, 0)
-        option_prices.append(payoff)
-
-    # Average payoff as the option price
-    option_price = np.exp(-r * T) * np.mean(option_prices)
-    return option_price
-
-def plot_histogram(simulated_prices, S0, K):
-    plt.figure(figsize=(8, 6))
-    plt.hist(simulated_prices, bins=50, color='blue', alpha=0.7)
-    plt.axvline(x=S0, color='red', linestyle='--', label=f'Stock Price Today: {S0}')
-    plt.axvline(x=K, color='green', linestyle='--', label=f'Strike Price: {K}')
-    plt.title('Simulated Stock Prices')
-    plt.xlabel('Stock Price')
-    plt.ylabel('Frequency')
-    plt.legend()
-    st.pyplot()
-
-# Image Processing Function
-def process_image(uploaded_image):
-    img = Image.open(uploaded_image)
-    img_bgr = np.array(img)  # Convert to BGR format for OpenCV processing
-
-    # Convert to grayscale using Numba
-    gray_image = grayscale_numba(img_bgr)
-    
-    # Apply Sobel edge detection
-    edge_image = sobel_edge_detection(gray_image)
-
-    # Convert grayscale and edge images to RGB for display
-    gray_image_rgb = cv2.cvtColor(gray_image, cv2.COLOR_GRAY2RGB)
-    edge_image_rgb = cv2.cvtColor(edge_image, cv2.COLOR_GRAY2RGB)
-
-    return img_bgr, gray_image_rgb, edge_image_rgb, gray_image, edge_image
-
-# Image Processing Section
-if option == 'Image Processing':
-    st.header('Image Processing')
-
-    # Upload image for processing
-    uploaded_image = st.file_uploader("Upload Image", type=["jpg", "png", "jpeg"])
-
-    if uploaded_image is not None:
-        img_bgr, gray_image_rgb, edge_image_rgb, gray_image, edge_image = process_image(uploaded_image)
-
-        # Display images side by side
-        st.image([img_bgr, gray_image_rgb, edge_image_rgb], caption=["Original Image", "Grayscale Image", "Edge Detection"], width=500)
-        
-        # Display histograms
-        st.subheader("Grayscale Image Histogram")
-        fig, ax = plt.subplots()
-        ax.hist(gray_image.ravel(), bins=256, color='gray', alpha=0.7)
-        ax.set_title('Grayscale Image Histogram')
-        st.pyplot(fig)
-        
-        st.subheader("Edge Detection Histogram")
-        fig, ax = plt.subplots()
-        ax.hist(edge_image.ravel(), bins=256, color='black', alpha=0.7)
-        ax.set_title('Edge Detection Histogram')
-        st.pyplot(fig)
-
-        # Display the original image as a large view
-        st.image(img_bgr, caption="Original Image (Large View)", use_column_width=True)
-    else:
-        st.warning("Please upload an image.")
+        img = frame.to_ndarray(format="bgr24")
+        gray = grayscale_numba(img)
+        edges = sobel_edge_detection(gray)
+        edges_bgr = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
+        return av.VideoFrame.from_ndarray(edges_bgr, format="bgr24")
 
 # Video Processing Section
 if option == 'Video Processing':
-    st.header('Real-Time Video Processing (Continuous Recording)')
+    st.header('Real-Time Video Processing')
+    webrtc_streamer(key="video", video_processor_factory=VideoProcessor)
 
-    # Create video processor for Streamlit WebRTC
-    processor = VideoProcessor()
-    webrtc_streamer(key="video", video_processor_factory=lambda: processor)
+# Financial Computation (Monte Carlo Simulation)
+def monte_carlo_simulation(S0, K, T, r, sigma, N):
+    dt = T / 365
+    option_prices = []
 
-    # Button to start and stop processing video
-    start_button = st.button('Start Video Processing')
-    stop_button = st.button('Stop Video Processing')
+    for _ in range(N):
+        ST = S0
+        for _ in range(int(T / dt)):
+            ST *= np.exp((r - 0.5 * sigma**2) * dt + sigma * np.sqrt(dt) * np.random.randn())
+        payoff = max(ST - K, 0)
+        option_prices.append(payoff)
 
-    if start_button:
-        processor.start_processing()  # Start processing video
-        st.info("Video processing has started.")
+    option_price = np.exp(-r * T) * np.mean(option_prices)
+    return option_price
 
-    if stop_button:
-        processor.stop_processing()  # Stop processing video
-        st.info("Video processing has stopped.")
-
-    # Display continuous video processing feedback
-    if processor.processing:
-        st.text("Processing frames in real-time...")
-    else:
-        st.text("Click 'Start Video Processing' to begin.")
-
-# Financial Computation Section
-elif option == 'Financial Computation':
+if option == 'Financial Computation':
     st.header('Financial Computation')
-
-    # Input fields for financial parameters
     S0 = st.number_input("Stock Price Today (S0)", min_value=0.0, value=90.0)
     K = st.number_input("Strike Price (K)", min_value=0.0, value=100.0)
     T = st.number_input("Time to Expiry (T in years)", min_value=0.0, value=2.0)
@@ -212,10 +104,24 @@ elif option == 'Financial Computation':
     N = st.number_input("Number of Simulations (N)", min_value=100, value=100000)
 
     if st.button('Compute Option Price'):
-        # Perform the Monte Carlo simulation
         option_price = monte_carlo_simulation(S0, K, T, r, sigma, N)
         st.write(f"Estimated Option Price: ${option_price:.2f}")
 
-        # Simulate and plot the distribution of stock prices
-        simulated_prices = [S0 * np.exp((r - 0.5 * sigma**2) * T + sigma * np.sqrt(T) * np.random.randn()) for _ in range(N)]
-        plot_histogram(simulated_prices, S0, K)
+# Image Processing Section
+def process_image(uploaded_image):
+    img = Image.open(uploaded_image)
+    img_bgr = np.array(img)
+    gray_image = grayscale_numba(img_bgr)
+    edge_image = sobel_edge_detection(gray_image)
+    gray_image_rgb = cv2.cvtColor(gray_image, cv2.COLOR_GRAY2RGB)
+    edge_image_rgb = cv2.cvtColor(edge_image, cv2.COLOR_GRAY2RGB)
+    return img_bgr, gray_image_rgb, edge_image_rgb
+
+if option == 'Image Processing':
+    st.header('Image Processing')
+    uploaded_image = st.file_uploader("Upload Image", type=["jpg", "png", "jpeg"])
+    if uploaded_image is not None:
+        img_bgr, gray_image_rgb, edge_image_rgb = process_image(uploaded_image)
+        st.image([img_bgr, gray_image_rgb, edge_image_rgb], caption=["Original", "Grayscale", "Edge Detection"], width=500)
+    else:
+        st.warning("Please upload an image.")
